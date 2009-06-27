@@ -19,6 +19,19 @@ module Foliage
 
   BranchTable = []
 
+  # Collection of methods to be included into the Sexp class.
+  module SexpDeepDup
+    # Performs a deep copy on Sexp objects. This is needed because
+    # Ruby2Ruby#process will modify its arguments (insert explicitive
+    # here).
+    def deep_dup
+      s = Sexp.new(*map { |p| p.respond_to?(:deep_dup) ? p.deep_dup : p })
+      s.line = self.line
+      s.file = self.file
+      s
+    end
+  end
+
   # Hook is the base class for instrumentation hooks. The Hook object
   # will be looked up at the instrumentation point and its #hook
   # method will be called.
@@ -142,21 +155,26 @@ module Foliage
     end
   end
   
-  def self.create_hook(sexp, in_condition)
-    branch = ConditionHook.new(sexp)
-    isexp = instrument(sexp, in_condition)
-    inst = branch.sexp
-    BranchTable.last.push(branch)
-    return inst
+  def self.instrument_branch(sexp, in_condition)
+    sexp[1] = instrument_cond(sexp[1], true)
+    sexp[2] = instrument(sexp[2], in_condition)
+    sexp[3] = instrument(sexp[3], in_condition)
   end
 
-  def self.instrument_case(sexp)
+  def self.instrument_cond(sexp, in_condition)
+    isexp = instrument(sexp, in_condition)
+    branch = ConditionHook.new(isexp)
+    BranchTable.last.push(branch)
+    return branch.sexp
+  end
+
+  def self.instrument_case(sexp, in_condition)
     new = nil
     operand = sexp[1]
 
     elseexpr = sexp[-1] || s(:nil)
 
-    elseexpr = instrument(elseexpr)
+    elseexpr = instrument(elseexpr, in_condition)
     
     hook = CaseElseHook.new(elseexpr)
     elseexpr = hook.sexp
@@ -167,7 +185,6 @@ module Foliage
     sexp[2..-2].reverse.each do |subsexp|
       orsexp = nil
       subsexp[1][1..-1].reverse.each do |value|
-        # p "create for #{value}"
         test = s(:call, value, :===, operand.deep_dup)
         hook = CaseHook.new(test)
         inst = hook.sexp
@@ -177,32 +194,33 @@ module Foliage
         else
           orsexp = inst
         end
-        # puts "orexp #{orsexp.inspect}"
       end
       nextif = s(:if, orsexp, subsexp[-1], nextif)
-      # puts "nextif #{nextif}"
     end
 
-    #    puts "result >>> #{nextif}"
-    return nextif
+    sexp.replace(nextif)
   end
 
+  # Recursively instruments an Sexp instance.
+  #
+  # == Parameters:
+  #
+  # +sexp+:: The Sexp object to instrument.
+  #
+  # +in_condition+:: Boolean set to true if the current Sexp may cause
+  # branching.
   def self.instrument(sexp, in_condition = nil)
     case sexp
     when Sexp
-      subinst = true
       case sexp.node_type
       when :if, :while, :until
-        sexp[1] = create_hook(sexp[1], true)
-        sexp[2] = instrument(sexp[2], in_condition)
-        sexp[3] = instrument(sexp[3], in_condition)
+        instrument_branch(sexp, in_condition)
       when :case
-        t = instrument_case(sexp)
-        sexp.replace(t)
+        instrument_case(sexp, in_condition)
       when :and, :or
-        sexp[1] = create_hook(sexp[1], true)
+        sexp[1] = instrument_cond(sexp[1], true)
         if in_condition
-          sexp[2] = create_hook(sexp[2], in_condition)
+          sexp[2] = instrument_cond(sexp[2], in_condition)
         end
       else
         sexp.each do |y|
@@ -217,20 +235,9 @@ module Foliage
   def self.cov_text(text, file = '-')
     BranchTable.push([])
     sexp = RubyParser.new.parse(text, file)
-    # puts "sexp #{sexp}"
     if sexp
       instrumented_sexp = instrument(sexp)
-      # puts "instrumented_sexp #{instrumented_sexp}"
-      orig = instrumented_sexp.deep_dup
-      begin
-        instrumented_code = Ruby2Ruby.new.process(instrumented_sexp)
-      #rescue Exception => e
-        #puts "FAILED ON:>>>>>>"
-        #p orig
-        #puts "<<<<<<<<<<<<<<<<"
-      #  raise
-        end
-      
+      instrumented_code = Ruby2Ruby.new.process(instrumented_sexp)
       eval instrumented_code, binding, file
     end
     report(BranchTable.pop)
@@ -256,18 +263,6 @@ module Foliage
 
 end
 
-module SexpDeepDup
-  # Performs a deep copy on Sexp objects. This is needed because
-  # Ruby2Ruby#process will modify its arguments (insert explicitive
-  # here).
-  def deep_dup
-    s = Sexp.new(*map { |p| p.respond_to?(:deep_dup) ? p.deep_dup : p })
-    s.line = self.line
-    s.file = self.file
-    s
-  end
-end
-
-class Sexp
-  include SexpDeepDup
+class Sexp #:nodoc:
+  include Foliage::SexpDeepDup
 end
