@@ -24,7 +24,7 @@ module Foliage
   # method will be called.
   class Hook
     def initialize(sexp)
-      @sexp = sexp.deep_dup
+      @sexp = sexp
     end
 
     def expr
@@ -43,6 +43,18 @@ module Foliage
     # must return its argument.
     def hook(val)
       raise NotImplementedError
+    end
+
+    # Construct a Sexp which calls Hook#hook on this object (in the
+    # current Ruby interpreter instance only).
+    def sexp
+      s(:call,
+        s(:call,
+          s(:const, "ObjectSpace"),
+          :_id2ref,
+          s(:arglist, s(:lit, object_id))),
+        :hook,
+        s(:arglist, @sexp.deep_dup))
     end
   end
 
@@ -133,14 +145,9 @@ module Foliage
   def self.create_hook(sexp, in_condition)
     branch = ConditionHook.new(sexp)
     isexp = instrument(sexp, in_condition)
-    inst = instr_sexp(isexp, branch)
+    inst = branch.sexp
     BranchTable.last.push(branch)
     return inst
-  end
-
-  def self.instr_sexp(sexp, hook)
-    hook_object = s(:call, s(:const, "ObjectSpace"), :_id2ref, s(:arglist, s(:lit, hook.object_id)))
-    return s(:call, hook_object, :hook, s(:arglist, sexp))
   end
 
   def self.instrument_case(sexp)
@@ -152,7 +159,7 @@ module Foliage
     elseexpr = instrument(elseexpr)
     
     hook = CaseElseHook.new(elseexpr)
-    elseexpr = instr_sexp(elseexpr, hook)
+    elseexpr = hook.sexp
     BranchTable.last.push(hook)
 
     nextif = elseexpr
@@ -163,7 +170,7 @@ module Foliage
         # p "create for #{value}"
         test = s(:call, value, :===, operand.deep_dup)
         hook = CaseHook.new(test)
-        inst = instr_sexp(test, hook)
+        inst = hook.sexp
         BranchTable.last.push(hook)
         if orsexp
           orsexp = s(:or, inst, orsexp)
