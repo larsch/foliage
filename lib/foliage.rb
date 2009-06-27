@@ -23,9 +23,7 @@ module Foliage
   # will be looked up at the instrumentation point and its #hook
   # method will be called.
   class Hook
-    attr_reader :file
-    def initialize(sexp, file)
-      @file = file
+    def initialize(sexp)
       @sexp = sexp.deep_dup
     end
 
@@ -35,6 +33,10 @@ module Foliage
 
     def line
       @sexp.line
+    end
+
+    def file
+      @sexp.file
     end
 
     # The hook method is called at the instrumentation point and
@@ -128,9 +130,9 @@ module Foliage
     end
   end
   
-  def self.create_hook(sexp, file, in_condition)
-    branch = ConditionHook.new(sexp, file)
-    isexp = instrument(sexp, file, in_condition)
+  def self.create_hook(sexp, in_condition)
+    branch = ConditionHook.new(sexp)
+    isexp = instrument(sexp, in_condition)
     inst = instr_sexp(isexp, branch)
     BranchTable.last.push(branch)
     return inst
@@ -141,15 +143,15 @@ module Foliage
     return s(:call, hook_object, :hook, s(:arglist, sexp))
   end
 
-  def self.instrument_case(sexp, file)
+  def self.instrument_case(sexp)
     new = nil
     operand = sexp[1]
 
     elseexpr = sexp[-1] || s(:nil)
 
-    elseexpr = instrument(elseexpr, file)
+    elseexpr = instrument(elseexpr)
     
-    hook = CaseElseHook.new(elseexpr, file)
+    hook = CaseElseHook.new(elseexpr)
     elseexpr = instr_sexp(elseexpr, hook)
     BranchTable.last.push(hook)
 
@@ -160,7 +162,7 @@ module Foliage
       subsexp[1][1..-1].reverse.each do |value|
         # p "create for #{value}"
         test = s(:call, value, :===, operand.deep_dup)
-        hook = CaseHook.new(test, file)
+        hook = CaseHook.new(test)
         inst = instr_sexp(test, hook)
         BranchTable.last.push(hook)
         if orsexp
@@ -178,26 +180,26 @@ module Foliage
     return nextif
   end
 
-  def self.instrument(sexp, file, in_condition = nil)
+  def self.instrument(sexp, in_condition = nil)
     case sexp
     when Sexp
       subinst = true
       case sexp.node_type
       when :if, :while, :until
-        sexp[1] = create_hook(sexp[1], file, true)
-        sexp[2] = instrument(sexp[2], file, in_condition)
-        sexp[3] = instrument(sexp[3], file, in_condition)
+        sexp[1] = create_hook(sexp[1], true)
+        sexp[2] = instrument(sexp[2], in_condition)
+        sexp[3] = instrument(sexp[3], in_condition)
       when :case
-        t = instrument_case(sexp, file)
+        t = instrument_case(sexp)
         sexp.replace(t)
       when :and, :or
-        sexp[1] = create_hook(sexp[1], file, true)
+        sexp[1] = create_hook(sexp[1], true)
         if in_condition
-          sexp[2] = create_hook(sexp[2], file, in_condition)
+          sexp[2] = create_hook(sexp[2], in_condition)
         end
       else
         sexp.each do |y|
-          instrument(y, file, in_condition)
+          instrument(y, in_condition)
         end
       end
     end
@@ -207,10 +209,10 @@ module Foliage
 
   def self.cov_text(text, file = '-')
     BranchTable.push([])
-    sexp = RubyParser.new.parse(text)
+    sexp = RubyParser.new.parse(text, file)
     # puts "sexp #{sexp}"
     if sexp
-      instrumented_sexp = instrument(sexp, file)
+      instrumented_sexp = instrument(sexp)
       # puts "instrumented_sexp #{instrumented_sexp}"
       orig = instrumented_sexp.deep_dup
       begin
@@ -254,6 +256,7 @@ module SexpDeepDup
   def deep_dup
     s = Sexp.new(*map { |p| p.respond_to?(:deep_dup) ? p.deep_dup : p })
     s.line = self.line
+    s.file = self.file
     s
   end
 end
