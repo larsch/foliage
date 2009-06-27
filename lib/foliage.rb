@@ -162,10 +162,11 @@ module Foliage
   end
 
   def self.instrument_cond(sexp, in_condition)
-    isexp = instrument(sexp, in_condition)
+    isexp = instrument(sexp.dup, in_condition)
     branch = ConditionHook.new(isexp)
     BranchTable.last.push(branch)
-    return branch.sexp
+    sexp.replace(branch.sexp)
+    return sexp
   end
 
   def self.instrument_case(sexp, in_condition)
@@ -199,6 +200,7 @@ module Foliage
     end
 
     sexp.replace(nextif)
+    return sexp
   end
 
   # Recursively instruments an Sexp instance.
@@ -218,11 +220,11 @@ module Foliage
       when :case
         instrument_case(sexp, in_condition)
       when :and, :or
-        sexp[1] = instrument_cond(sexp[1], true)
+        instrument_cond(sexp[1], true)
         if in_condition
-          sexp[2] = instrument_cond(sexp[2], true)
+          instrument_cond(sexp[2], true)
         else
-          sexp[2] = instrument(sexp[2], false)
+          instrument(sexp[2], false)
         end
       else
         sexp.each do |y|
