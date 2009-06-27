@@ -220,7 +220,9 @@ module Foliage
       when :and, :or
         sexp[1] = instrument_cond(sexp[1], true)
         if in_condition
-          sexp[2] = instrument_cond(sexp[2], in_condition)
+          sexp[2] = instrument_cond(sexp[2], true)
+        else
+          sexp[2] = instrument(sexp[2], false)
         end
       else
         sexp.each do |y|

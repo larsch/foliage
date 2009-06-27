@@ -30,6 +30,12 @@ class FoliageTest < Test::Unit::TestCase
     report = Foliage.cov_text("[true,false].each do |b| (b && true) && 0; end")
     assert_equal 1, report.size
     assert_match(/condition true was never false/, report[0])
+
+    # Check that sub-expressions of the second operand can also cause
+    # warnings.
+    report = Foliage.cov_text %{ [true,false].each { |b| b && (true && 0) } }
+    assert_equal 1, report.size
+    assert_match(/condition true was never false/, report[0])
   end
   
   def test_subiftrue
