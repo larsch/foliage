@@ -1,0 +1,7 @@
+History.txt
+Manifest.txt
+README.txt
+Rakefile
+bin/foliage
+lib/foliage.rb
+test/test_foliage.rb
