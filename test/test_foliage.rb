@@ -40,9 +40,9 @@ class FoliageTest < Test::Unit::TestCase
 
   def test_postifmulti
     report = Foliage.cov_text("for a in [false,true] do nil if a or !a; end")
-    puts report
-    assert_equal 1, report.size
-    assert_match(/condition true was never false/, report[0])
+    assert_equal 2, report.size
+    assert report.find { |x| x =~ /condition \((not |!)a\) was never false/ }
+    assert report.find { |x| x =~ /condition \(a or \((not |!)a\)\) was never false/ }
   end
 
   def test_postif

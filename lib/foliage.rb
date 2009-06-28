@@ -163,8 +163,9 @@ module Foliage
   end
 
   def self.instrument_cond(sexp, in_condition)
-    isexp = instrument(sexp.dup, in_condition)
-    branch = ConditionHook.new(isexp, sexp.deep_dup)
+    orig_cond = sexp.deep_dup
+    isexp = instrument(sexp, in_condition)
+    branch = ConditionHook.new(isexp, orig_cond)
     BranchTable.last.push(branch)
     sexp.replace(branch.sexp)
     return sexp
@@ -204,7 +205,9 @@ module Foliage
     return sexp
   end
 
-  # Recursively instruments an Sexp instance.
+  # Recursively instruments an Sexp instance. This will mangle the
+  # Sexp tree by extra instructions. Expressions that are instrumented
+  # are copied first to preserve their printed form.
   #
   # == Parameters:
   #
@@ -233,7 +236,6 @@ module Foliage
         end
       end
     end
-    
     return sexp
   end
   
