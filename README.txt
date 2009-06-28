@@ -6,11 +6,27 @@
 
 Foliage is a code coverage analysis tool for decision/condition
 coverage. Foliage will examine all code branching point in your code
-and report untested branch conditions.
+and report untested branch conditions. Coverage analysis such as
+'rcov' analyses only code-line coverage and may easily miss untested
+code. Here's an example:
+
+   some_method(some_argument + 8) if some_condition
+
+When this line of code is reached, some_condition is evaluted, but
+depending on the outcome, some_method may never be called. RCov can
+not detect this, but Foliage can. Here is another example:
+
+   variable = condition ? one_method(2) : other_method(5)
+
+Foliage will detect whether both cases (non-nil/false and nil/false)
+has been tested.
 
 == FEATURES/PROBLEMS:
 
-* FIX (list of features or problems)
+* Limitation: Foliage can only detect coverage for a single ruby
+  interpreter instance. This means you need to run all of your tests
+  in the same Ruby instance to generate meaningful coverage analysis
+  results (Aggregate results are not currently possible).
 
 == SYNOPSIS:
 

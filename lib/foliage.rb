@@ -36,20 +36,21 @@ module Foliage
   # will be looked up at the instrumentation point and its #hook
   # method will be called.
   class Hook
-    def initialize(sexp)
+    def initialize(sexp, ref_sexp = sexp)
       @sexp = sexp
+      @ref_sexp = ref_sexp
     end
 
     def expr
-      @expr ||= Ruby2Ruby.new.process(@sexp)
+      @expr ||= Ruby2Ruby.new.process(@ref_sexp)
     end
 
     def line
-      @sexp.line
+      @ref_sexp.line
     end
 
     def file
-      @sexp.file
+      @ref_sexp.file
     end
 
     # The hook method is called at the instrumentation point and
@@ -149,7 +150,7 @@ module Foliage
     def report
       reports = []
       if !@nomatch
-        reports.push "case operand never matched nothing."
+        reports.push "#{file}:#{line}: case operand never matched nothing."
       end
       return reports
     end
@@ -163,7 +164,7 @@ module Foliage
 
   def self.instrument_cond(sexp, in_condition)
     isexp = instrument(sexp.dup, in_condition)
-    branch = ConditionHook.new(isexp)
+    branch = ConditionHook.new(isexp, sexp.deep_dup)
     BranchTable.last.push(branch)
     sexp.replace(branch.sexp)
     return sexp
@@ -177,7 +178,7 @@ module Foliage
 
     elseexpr = instrument(elseexpr, in_condition)
     
-    hook = CaseElseHook.new(elseexpr)
+    hook = CaseElseHook.new(elseexpr, sexp[-1] || sexp)
     elseexpr = hook.sexp
     BranchTable.last.push(hook)
 
@@ -187,7 +188,7 @@ module Foliage
       orsexp = nil
       subsexp[1][1..-1].reverse.each do |value|
         test = s(:call, value, :===, operand.deep_dup)
-        hook = CaseHook.new(test)
+        hook = CaseHook.new(test, value)
         inst = hook.sexp
         BranchTable.last.push(hook)
         if orsexp
@@ -235,15 +236,19 @@ module Foliage
     
     return sexp
   end
-
-  def self.cov_text(text, file = '-')
-    BranchTable.push([])
-    sexp = RubyParser.new.parse(text, file)
+  
+  def self.instr_eval(code, binding, file)
+    sexp = RubyParser.new.parse(code, file)
     if sexp
       instrumented_sexp = instrument(sexp)
       instrumented_code = Ruby2Ruby.new.process(instrumented_sexp)
       eval instrumented_code, binding, file
     end
+  end
+
+  def self.cov_text(text, file = '-')
+    BranchTable.push([])
+    instr_eval(text, binding, file)
     report(BranchTable.pop)
   end
   

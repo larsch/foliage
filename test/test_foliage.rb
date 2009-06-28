@@ -37,6 +37,19 @@ class FoliageTest < Test::Unit::TestCase
     assert_equal 1, report.size
     assert_match(/condition true was never false/, report[0])
   end
+
+  def test_postifmulti
+    report = Foliage.cov_text("for a in [false,true] do nil if a or !a; end")
+    puts report
+    assert_equal 1, report.size
+    assert_match(/condition true was never false/, report[0])
+  end
+
+  def test_postif
+    report = Foliage.cov_text("for a in [true,false] do nil if true and a; end")
+    assert_equal 1, report.size
+    assert_match(/condition true was never false/, report[0])
+  end
   
   def test_subiftrue
     report = Foliage.cov_text("[true,false].each do |x| if x; 1; true && false; end; end")
@@ -164,6 +177,14 @@ class FoliageTest < Test::Unit::TestCase
     #ruby_parser bug with line_numbers
     # report = Foliage.cov_text %{ \n 1 unless true \n \n }
     # assert_match(/^-:2:/, report[0])
+  end
+
+  def test_exception
+    report = Foliage.cov_text %{ begin raise Exception; rescue Exception; end }
+    assert_equal(0, report.size)
+    
+    #report = Foliage.cov_text %{ begin raise ArgumentError; rescue ArgumentError, SystemCallError; end }
+    #assert_equal(1, report.size)
   end
   
 end
