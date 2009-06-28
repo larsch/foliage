@@ -15,7 +15,7 @@ require 'ruby2ruby'
 # 'obj.method' may invoke different methods depending on the type of
 # 'obj'.
 module Foliage
-  VERSION = '1.0.0'
+  VERSION = '0.1.0'
 
   BranchTable = []
 
