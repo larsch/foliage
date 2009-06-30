@@ -2,8 +2,14 @@
 # -*- ruby -*-
 
 require 'foliage'
-at_exit do
-  puts Foliage.report(Foliage::BranchTable.pop)
-end
+require 'sexpwrap'
+END {
+  if $!.nil?
+    puts Foliage.report(Foliage::BranchTable.pop)
+  end
+}
 Foliage::BranchTable.push([])
-Foliage.instr_eval(File.read(ARGV[0]), binding, ARGV[0])
+LoadWrap.filter_sexp do |sexp|
+  Foliage.instrument(sexp)
+end
+load ARGV[0]
