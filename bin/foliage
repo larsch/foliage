@@ -1,15 +1,69 @@
 #!/usr/bin/env ruby
 # -*- ruby -*-
-
+require 'optparse'
 require 'foliage'
 require 'sexpwrap'
+require 'ostruct'
+
+options = OpenStruct.new(:verbose => false,
+                         :mode => :single,
+                         :include => [],
+                         :exclude => [],
+                         :rubylib => [])
+
+p ARGV
+OptionParser.new do |opts|
+  opts.banner = "Usage: foliage [foliage-options] <script> [script-options]"
+  opts.on '-v', '--verbose', "Run verbosely" do |v|
+    options.verbose = true
+  end
+  opts.on '-l', '--local', "Instrument all files in same directory as the specified file" do |v|
+    options.local = true
+  end
+  opts.on '-h', '--hierachy', "Instrument all files in the local hierachy (current working directory and below)" do |v|
+    options.hierachy = true
+  end
+  opts.on '-i', '--include', "Instrument the specified filename (any directory) or all files in the specified directory (absolute or relative)" do |v|
+    options.include.push(v)
+  end
+  opts.on '-x', '--exclude', "Exclude the specified files or all files in the specified directory" do |v|
+    options.exclude.push(v)
+  end
+  opts.on '-I', '--rubylib PATH', "Add Ruby include path" do |v|
+    options.rubylib.push(v)
+  end
+end.parse!
+
+
+$:.push(*options.rubylib)
+
+
+load_file = ARGV.shift
+
 END {
   if $!.nil?
     puts Foliage.report(Foliage::BranchTable.pop)
   end
 }
-Foliage::BranchTable.push([])
-LoadWrap.filter_sexp do |sexp|
-  Foliage.instrument(sexp)
+
+include_directories = []
+include_directories.push File.dirname(File.expand_path(load_file))
+if File.basename(File.dirname(File.expand_path(load_file))) == 'test'
+  libdir = File.expand_path(File.join(File.dirname(File.expand_path(load_file)), '..', 'lib'))
+  include_directories.push(libdir)
+  include_directories.push *Dir["#{libdir}/**/*"].select { |x| File.directory?(x) }
 end
-load ARGV[0]
+
+puts include_directories
+
+Foliage::BranchTable.push([])
+LoadWrap.filter_sexp do |sexp, filename|
+  p File.dirname(File.expand_path(filename))
+  if include_directories.include?(File.dirname(File.expand_path(filename)))
+    puts "[foliage] Instrumenting #{filename}" if options.verbose
+    Foliage.instrument(sexp)
+  else
+    nil
+  end
+end
+load load_file
